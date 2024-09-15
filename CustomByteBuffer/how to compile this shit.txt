@@ -1,0 +1,10 @@
+May god have mercy on your soul
+
+This is native C code to create a ByteBuffer from a memory address and length. It exists because Java has this thing
+called "strong encapsulation" that does not let me work directly with memory. But it does let C code work with
+direct memory addresses :)
+
+Compile C code with headers
+gcc -shared -o "CustomByteBuffer.dll" "CustomByteBuffer.c" -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/win32"
+
+Drop it in composeApp\resources\windows-x64 (or wherever)

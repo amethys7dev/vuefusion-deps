@@ -1,0 +1,40 @@
+name: Build CustomByteBuffer
+on:
+    workflow_dispatch:
+
+jobs:
+    build_custombytebuffer:
+        name: Build CustomByteBuffer
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest, windows-latest]
+                include:
+                  - os: ubuntu-latest
+                    outName: CustomByteBuffer.so
+                    includePlatformName: linux
+                  - os: macos-latest
+                    outName: CustomByteBuffer.dylib
+                    includePlatformName: darwin
+                  - os: windows-latest
+                    outName: CustomByteBuffer.dll
+                    includePlatformName: win32
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v3
+        
+            - name: Setup Java
+              uses: actions/setup-java@v4
+              with:
+                java-version: '21'
+                distribution: 'adopt'
+
+            - name: Build
+              shell: bash
+              working-directory: CustomByteBuffer
+              run: gcc -shared -o ${{ matrix.outName }} "CustomByteBuffer.c" -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/${{ matrix.includePlatformName }}"
+
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v3
+              with:
+                name: ${{ matrix.outName }}
+                path: CustomByteBuffer/${{ matrix.outName }}

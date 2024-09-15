@@ -1,0 +1,200 @@
+name: Build ONNXRuntime
+
+on:
+  workflow_dispatch:
+    inputs:
+      macos-coreml:
+        type: boolean
+        required: true
+        default: false
+      windows-dml:
+        type: boolean
+        required: true
+        default: false
+      windows-tensorrt:
+        type: boolean
+        required: true
+        default: false
+env:
+  python_version: 3.11
+  xcode_version: 15.2
+
+
+jobs:
+  macos:
+    runs-on: macos-14
+    if: ${{ inputs.macos-coreml == true }}
+
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.python_version }}
+
+    - name: Verify ARM64 machine
+      shell: python
+      run: |
+        import platform
+        assert platform.machine() == "arm64", "This job expects to be run on an ARM64 machine."
+
+    - name: Use Xcode ${{ env.xcode_version }}
+      shell: bash
+      run: |
+        XCODE_DEVELOPER_DIR="/Applications/Xcode_${{ env.xcode_version }}.app/Contents/Developer"
+        sudo xcode-select --switch "${XCODE_DEVELOPER_DIR}"
+
+    - uses: actions/checkout@v4
+      with:
+        repository: 'microsoft/onnxruntime'
+    
+    - name: Cache build
+      uses: actions/cache@v3
+      with:
+        path: ${{github.workspace}}/build
+        key: macos-build-onnx
+        restore-keys: macos-build-onnx
+
+    - name: Build
+      shell: bash
+      run: |
+        python ./tools/ci_build/build.py \
+          --build_dir ./build \
+          --update \
+          --build --parallel \
+          --build_shared_lib \
+          --build_java \
+          --use_coreml \
+          --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=arm64 \
+          --config RelWithDebInfo
+
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: onnxruntime-mac-coreml
+        path: java/build/libs/*.jar
+
+  windows-dml:
+    runs-on: windows-latest
+    if: ${{ inputs.windows-dml == true }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'microsoft/onnxruntime'
+      
+      - name: Cache build
+        uses: actions/cache@v4
+        with:
+          path: ${{github.workspace}}/build
+          key: windows-build-onnx-dml
+          restore-keys: windows-build-onnx-dml
+    
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.x'
+          architecture: 'x64'
+      
+      - name: Setup MSBuild
+        uses: TheMrMilchmann/setup-msvc-dev@fb19abb8a41b3cf0340f5d1be17d420309232be6
+        with:
+          arch: x64
+  
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
+
+      - name: Configure DirectML
+        shell: bash
+        run: |
+          python ./tools/ci_build/build.py \
+            --update \
+            --build_dir build \
+            --config RelWithDebInfo \
+            --parallel \
+            --compile_no_warning_as_error \
+            --skip_submodule_sync \
+            --build_java \
+            --use_dml
+          
+      - name: Build DirectML
+        working-directory: build/RelWithDebInfo
+        run: |
+          msbuild ./onnxruntime.sln /p:Configuration=Release /m
+
+      - name: Upload DirectML
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnxruntime-windows-dml
+          path: |
+            build/RelWithDebInfo/java/build/libs/*.jar
+            build/RelWithDebInfo/Release/DirectML.dll
+  windows-tensorrt:
+    if: ${{ inputs.windows-tensorrt == true }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'microsoft/onnxruntime'
+      
+      - name: Cache build
+        uses: actions/cache@v4
+        with:
+          path: ${{github.workspace}}/build
+          key: windows-build-onnx-tensorrt
+          restore-keys: windows-build-onnx-tensorrt
+    
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.x'
+          architecture: 'x64'
+      
+      - name: Setup MSBuild
+        uses: TheMrMilchmann/setup-msvc-dev@fb19abb8a41b3cf0340f5d1be17d420309232be6
+        with:
+          arch: x64
+  
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
+      - uses: Jimver/cuda-toolkit@v0.2.16
+        id: cuda-toolkit
+        with:
+          cuda: '12.5.0'
+
+      - name: Configure TensorRT
+        shell: bash
+        run: |
+          python ./tools/ci_build/build.py \
+            --update \
+            --build_dir build \
+            --config RelWithDebInfo \
+            --parallel \
+            --compile_no_warning_as_error \
+            --skip_submodule_sync \
+            --build_java \
+            --use_
+
+
+      - name: Build TensorRT
+        working-directory: build/RelWithDebInfo
+        run: |
+          msbuild ./onnxruntime.sln /p:Configuration=Release /m
+
+      - name: Upload TensorRT
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnxruntime-windows-dml.jar
+          path: build/RelWithDebInfo/java/build/libs/*.jar

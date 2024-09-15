@@ -1,0 +1,80 @@
+name: Build OpenCV
+on:
+    workflow_dispatch:
+
+jobs:
+    build_opencv:
+        name: Build OpenCV
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest, windows-latest]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v3
+              with:
+                repository: 'opencv/opencv'
+            - name: Cache build
+              uses: actions/cache@v3
+              with:
+                path: ${{github.workspace}}/build
+                key: ${{ matrix.os }}-build-opencv
+                restore-keys: ${{ matrix.os }}-build-opencv
+            
+            - name: Setup MSBuild
+              if: matrix.os == 'windows-latest'
+              uses: TheMrMilchmann/setup-msvc-dev@fb19abb8a41b3cf0340f5d1be17d420309232be6
+              with:
+                arch: x64
+        
+            - name: Setup Java
+              uses: actions/setup-java@v4
+              with:
+                java-version: '21'
+                distribution: 'adopt'
+            
+            - name: Move into build directory
+              shell: bash
+              run: |
+                mkdir -p build
+
+            - name: Configure Build
+              working-directory: build
+              run: cmake -DBUILD_SHARED_LIBS=OFF -DBUILD_JAVA=ON -DBUILD_FAT_JAVA_LIB=ON -DWITH_GSTREAMER=ON  ../
+
+            - name: Build (Linux and MacOS)
+              if: matrix.os != 'windows-latest'
+              working-directory: build
+              run: make -j4
+
+            - name: Build (Windows)
+              if: matrix.os == 'windows-latest'
+              working-directory: build
+              run: msbuild ./OpenCV.sln /p:Configuration=Release /m
+            
+            - name: Upload Jar
+              uses: actions/upload-artifact@v3
+              if: matrix.os == 'ubuntu-latest'
+              with:
+                name: opencv-4100.jar
+                path: build/bin/opencv-4100.jar
+            
+            - name: Upload Shared Library
+              if: matrix.os == 'ubuntu-latest'
+              uses: actions/upload-artifact@v3
+              with:
+                name: opencv_java4100.so
+                path: build/lib/libopencv_java4100.so
+            
+            - name: Upload DLL
+              if: matrix.os == 'windows-latest'
+              uses: actions/upload-artifact@v3
+              with:
+                name: opencv_java4100.dll
+                path: build/bin/Release/opencv_java4100.dll
+
+            - name: Upload Dylib
+              if: matrix.os == 'macos-latest'
+              uses: actions/upload-artifact@v3
+              with:
+                name: opencv_java4100.dylib
+                path: build/lib/libopencv_java4100.dylib
