@@ -65,6 +65,7 @@ jobs:
           --build_shared_lib \
           --build_java \
           --use_coreml \
+          --enable_training \
           --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=arm64 \
           --config RelWithDebInfo
 
@@ -121,7 +122,8 @@ jobs:
             --compile_no_warning_as_error \
             --skip_submodule_sync \
             --build_java \
-            --use_dml
+            --use_dml \
+            --enable_training
           
       - name: Build DirectML
         working-directory: build/RelWithDebInfo
